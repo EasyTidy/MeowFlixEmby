@@ -1,16 +1,26 @@
 # Binaries
 /meowflix
 /meowflix.exe
+/meowflix.exe~
 *.dll
 *.so
 *.dylib
 
 # Local config & logs
 meowflix.yaml
+meowflix.*.yaml
+.meowflix-device-id
 *.log
+
+# Throwaway dev probes (not committed)
+/probe.sh
+/cmd/wsprobe/
 
 # Build output
 /dist/
 
 # OS / editor
 .DS_Store
+/cmd/mpvprobe/
+/e2e_test.sh
+/gc_test.sh

@@ -65,6 +65,47 @@ func existingForm(p string) (string, bool) {
 	return "", false
 }
 
+// MapPath rewrites serverPath using the first matching prefix in maps by
+// stripping Src and prepending Dst, keeping forward slashes (openlist paths use
+// "/"). Unlike TranslatePath it does no OS-separator normalisation or filesystem
+// check. If no prefix matches, serverPath is returned unchanged.
+func MapPath(serverPath string, maps []PathMap) string {
+	for _, m := range maps {
+		if m.Src == "" || !strings.HasPrefix(serverPath, m.Src) {
+			continue
+		}
+		rest := strings.TrimPrefix(serverPath, m.Src)
+		joined := strings.TrimRight(m.Dst, "/") + rest
+		if !strings.HasPrefix(joined, "/") {
+			joined = "/" + joined
+		}
+		return strings.ReplaceAll(joined, "\\", "/")
+	}
+	return serverPath
+}
+
+// translatableExisting reports whether serverPath maps to a local file that
+// actually exists on disk (trying NFC/NFD forms), used to prefer a verified
+// local mount over cloud strategies.
+func translatableExisting(serverPath string, maps []PathMap) bool {
+	if !translatable(serverPath, maps) {
+		return false
+	}
+	local := normalizeSeparators(translateRaw(serverPath, maps))
+	_, ok := existingForm(local)
+	return ok
+}
+
+// translateRaw applies the first matching prefix map without a filesystem check.
+func translateRaw(serverPath string, maps []PathMap) string {
+	for _, m := range maps {
+		if m.Src != "" && strings.HasPrefix(serverPath, m.Src) {
+			return m.Dst + strings.TrimPrefix(serverPath, m.Src)
+		}
+	}
+	return serverPath
+}
+
 // hasAnyPrefix reports whether s starts with any of the given prefixes
 // (empty prefixes are ignored).
 func hasAnyPrefix(s string, prefixes []string) bool {

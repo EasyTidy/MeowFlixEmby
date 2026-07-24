@@ -38,11 +38,11 @@ type Options struct {
 
 // Client is an Emby/Jellyfin REST client and mediaserver.Server implementation.
 type Client struct {
-	opts    Options
-	base    string
-	http    *http.Client
-	token   string
-	userID  string
+	opts       Options
+	base       string
+	http       *http.Client
+	token      string
+	userID     string
 	authScheme string
 }
 

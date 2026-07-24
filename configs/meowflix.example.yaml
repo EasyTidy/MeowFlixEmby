@@ -25,7 +25,28 @@ playback:
   path_check: false                       # 路径转换后校验文件存在 + NFC/NFD
   one_instance: false                     # 是否限制播放器单实例
 
+# openlist（兼容 AList）网盘直连。留空 host 即关闭。
+# 策略优先级：本地挂载磁盘（校验文件存在）→ openlist 直连 → 服务器 HTTP 串流。
+# 原理：把服务器端路径前缀替换/删除，映射成 openlist 内的路径，再经 openlist API
+# 换取网盘 raw_url 直连播放（绕过服务器中转）。
+openlist:
+  host: ""                                # 例：http://192.168.31.10:5255；留空关闭
+  token: ""                               # openlist API key（可用环境变量 MEOWFLIX_OPENLIST_TOKEN 覆盖）
+  # 服务器端路径前缀 → openlist 内路径前缀。dst 可为空表示 openlist 根。
+  # 例：src=/volume1/video dst=""，会把
+  #   /volume1/video/123Pan/电影/x.mp4  →  openlist /123Pan/电影/x.mp4
+  path_maps:
+    - src: /volume1/video
+      dst: ""
+
 players:
+  # 遥控能力对照：
+  #   mpv      —— 全支持（暂停/快进/Seek/音量/静音/字幕·音轨切换/消息/连播），首选
+  #   vlc      —— 大部分（HTTP 接口：暂停/Seek/音量/音轨·字幕/停止；DisplayMessage 无接口，静默忽略）
+  #   mpc-hc   —— 大部分（Web 接口：暂停/Seek/音量/静音/停止/上下集；需在 MPC 选项里开启 Web 界面，
+  #               否则自动降级为“仅启动+停止”）
+  #   potplayer—— 仅启动播放 + 停止（无运行时遥控/进度回传）
+  #   generic  —— 任意可执行文件，仅启动 + 停止（配置了 exe.generic 才启用）
   default: mpv
   by_path:                                # 按媒体路径关键字选择播放器
     - player: vlc
@@ -34,6 +55,8 @@ players:
     mpv: C:\Green\mpv\mpv.exe
     potplayer: C:\Program Files\DAUM\PotPlayer\PotPlayerMini64.exe
     vlc: C:\Green\vlc\vlc.exe
+    mpc-hc: C:\Program Files\MPC-HC\mpc-hc64.exe
+    # generic: C:\Path\To\AnyPlayer.exe   # 可选：任意“仅启动”播放器
 
 subtitle:
   priority: ["中英", "双语", "简", "chi", "ass", "srt"]

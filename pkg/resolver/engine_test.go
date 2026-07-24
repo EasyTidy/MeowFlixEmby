@@ -1,27 +1,20 @@
 package resolver
 
 import (
-	"context"
 	"testing"
 
 	"github.com/EasyTidy/MeowFlixEmby/pkg/mediaserver"
 )
 
-// fakeServer provides deterministic URLs for HTTP-stream decisions.
-type fakeServer struct{}
+// fakeURLs provides deterministic URLs for HTTP-stream decisions. It satisfies
+// the narrow mediaserver.URLBuilder the resolver now depends on.
+type fakeURLs struct{}
 
-func (fakeServer) Authenticate(context.Context) error                                  { return nil }
-func (fakeServer) AnnounceCapabilities(context.Context, mediaserver.Capabilities) error { return nil }
-func (fakeServer) ResolveItem(context.Context, string) (*mediaserver.MediaItem, error)  { return nil, nil }
-func (fakeServer) ReportStart(context.Context, mediaserver.PlaybackState) error         { return nil }
-func (fakeServer) ReportProgress(context.Context, mediaserver.PlaybackState) error      { return nil }
-func (fakeServer) ReportStopped(context.Context, mediaserver.PlaybackState) error       { return nil }
-
-func (fakeServer) StreamURL(item *mediaserver.MediaItem, s *mediaserver.MediaSource) string {
+func (fakeURLs) StreamURL(item *mediaserver.MediaItem, s *mediaserver.MediaSource) string {
 	return "https://srv/videos/" + item.ID + "/stream?MediaSourceId=" + s.ID
 }
 
-func (fakeServer) SubtitleURL(item *mediaserver.MediaItem, s *mediaserver.MediaSource, st *mediaserver.MediaStream) string {
+func (fakeURLs) SubtitleURL(item *mediaserver.MediaItem, s *mediaserver.MediaSource, st *mediaserver.MediaStream) string {
 	return "https://srv/sub/" + item.ID
 }
 
@@ -98,7 +91,7 @@ func TestResolve_Methods(t *testing.T) {
 	e := New()
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			d, err := e.Resolve(item(tc.src), fakeServer{}, tc.cfg)
+			d, err := e.Resolve(item(tc.src), fakeURLs{}, tc.cfg)
 			if err != nil {
 				t.Fatalf("Resolve error: %v", err)
 			}
@@ -119,12 +112,64 @@ func TestResolve_Methods(t *testing.T) {
 	}
 }
 
+func TestResolve_Openlist(t *testing.T) {
+	e := New()
+	cfg := Config{
+		OpenlistEnabled:  true,
+		OpenlistPathMaps: []PathMap{{Src: "/volume1/video", Dst: ""}},
+	}
+	// A server path with no verified local mount routes to openlist with the
+	// prefix stripped.
+	src := mediaserver.MediaSource{ID: "s", Path: "/volume1/video/123Pan/电影/x/movie.mp4"}
+	d, err := e.Resolve(item(src), fakeURLs{}, cfg)
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if d.Method != MethodOpenlist {
+		t.Fatalf("method = %v, want Openlist", d.Method)
+	}
+	if d.OpenlistPath != "/123Pan/电影/x/movie.mp4" {
+		t.Fatalf("openlist path = %q", d.OpenlistPath)
+	}
+	if d.MediaPath != "" {
+		t.Fatalf("MediaPath should be empty until caller resolves, got %q", d.MediaPath)
+	}
+
+	// With Dst prefix.
+	cfg2 := Config{OpenlistEnabled: true, OpenlistPathMaps: []PathMap{{Src: "/电视剧", Dst: "/电视剧"}}}
+	d2, _ := e.Resolve(item(mediaserver.MediaSource{ID: "s2", Path: "/电视剧/show/ep1.mkv"}), fakeURLs{}, cfg2)
+	if d2.Method != MethodOpenlist || d2.OpenlistPath != "/电视剧/show/ep1.mkv" {
+		t.Fatalf("mapped = %v %q", d2.Method, d2.OpenlistPath)
+	}
+
+	// Openlist disabled -> falls through to HTTP stream (no local maps).
+	d3, _ := e.Resolve(item(src), fakeURLs{}, Config{})
+	if d3.Method != MethodHTTPStream {
+		t.Fatalf("disabled openlist should fall to HTTPStream, got %v", d3.Method)
+	}
+}
+
+func TestMapPath(t *testing.T) {
+	t.Parallel()
+	maps := []PathMap{{Src: "/volume1/video", Dst: ""}, {Src: "/A", Dst: "/mnt/A"}}
+	tests := []struct{ in, want string }{
+		{"/volume1/video/123Pan/电影/a.mp4", "/123Pan/电影/a.mp4"},
+		{"/A/电影/b.mkv", "/mnt/A/电影/b.mkv"},
+		{"/other/c.mkv", "/other/c.mkv"}, // no match -> unchanged
+	}
+	for _, tc := range tests {
+		if got := MapPath(tc.in, maps); got != tc.want {
+			t.Errorf("MapPath(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
 func TestResolve_Errors(t *testing.T) {
 	e := New()
-	if _, err := e.Resolve(nil, fakeServer{}, Config{}); err == nil {
+	if _, err := e.Resolve(nil, fakeURLs{}, Config{}); err == nil {
 		t.Error("expected error for nil item")
 	}
-	if _, err := e.Resolve(&mediaserver.MediaItem{ID: "x"}, fakeServer{}, Config{}); err == nil {
+	if _, err := e.Resolve(&mediaserver.MediaItem{ID: "x"}, fakeURLs{}, Config{}); err == nil {
 		t.Error("expected error for item with no sources")
 	}
 }

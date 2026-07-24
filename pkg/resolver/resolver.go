@@ -13,6 +13,10 @@ const (
 	MethodDirectDisk Method = iota
 	// MethodDirectURL plays a cloud/http URL directly (strm/http source).
 	MethodDirectURL
+	// MethodOpenlist resolves the path through openlist to a cloud-direct raw
+	// URL. Decision.OpenlistPath holds the mapped openlist path; the caller
+	// (session) performs the API call and fills MediaPath.
+	MethodOpenlist
 	// MethodHTTPStream streams via the server's direct-stream URL.
 	MethodHTTPStream
 )
@@ -24,6 +28,8 @@ func (m Method) String() string {
 		return "DirectDisk"
 	case MethodDirectURL:
 		return "DirectURL"
+	case MethodOpenlist:
+		return "Openlist"
 	case MethodHTTPStream:
 		return "HTTPStream"
 	default:
@@ -39,6 +45,12 @@ type Config struct {
 	PathCheck         bool
 	VersionPrefer     []string
 	SubtitlePriority  []string
+
+	// OpenlistEnabled turns on the openlist direct-cloud strategy: a server
+	// path not present on a local mount is mapped via OpenlistPathMaps and
+	// resolved to a cloud-direct URL by the caller.
+	OpenlistEnabled  bool
+	OpenlistPathMaps []PathMap
 }
 
 // PathMap maps a server-side prefix to a local prefix.
@@ -56,9 +68,14 @@ type Decision struct {
 	MountDisk  bool
 	SubFile    string
 	SubIndex   int
+	// OpenlistPath is the mapped openlist file path when Method is
+	// MethodOpenlist; the caller resolves it to a raw URL and sets MediaPath.
+	OpenlistPath string
 }
 
-// Resolver selects a playback method and target for a media item.
+// Resolver selects a playback method and target for a media item. It depends
+// only on mediaserver.URLBuilder (StreamURL/SubtitleURL) — not the full Server
+// contract — so the decision logic stays decoupled from auth/session concerns.
 type Resolver interface {
-	Resolve(item *mediaserver.MediaItem, srv mediaserver.Server, cfg Config) (Decision, error)
+	Resolve(item *mediaserver.MediaItem, urls mediaserver.URLBuilder, cfg Config) (Decision, error)
 }

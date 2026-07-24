@@ -1,0 +1,29 @@
+# systemd user service for the MeowFlixEmby daemon (Linux).
+#
+# Install (per-user, recommended so the player has a desktop session):
+#   mkdir -p ~/.config/systemd/user
+#   cp deploy/systemd/meowflix.service ~/.config/systemd/user/
+#   # edit ExecStart / config path below to match your install
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now meowflix.service
+#   systemctl --user status meowflix.service
+#
+# Logs: journalctl --user -u meowflix.service -f
+
+[Unit]
+Description=MeowFlixEmby Cast Daemon
+Documentation=https://github.com/EasyTidy/MeowFlixEmby
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust these two paths to your installation:
+ExecStart=%h/.local/bin/meowflix -config %h/.config/meowflix/meowflix.yaml
+Restart=on-failure
+RestartSec=5
+# Give the daemon access to the graphical session so it can launch a player.
+Environment=DISPLAY=:0
+
+[Install]
+WantedBy=default.target

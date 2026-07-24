@@ -16,12 +16,25 @@ const (
 	CtrlPreviousTrack
 	CtrlSeekAbsolute // uses SeekSec
 	CtrlSeekRelative // uses SeekSec (delta)
+	CtrlSetVolume    // uses Volume (0-100)
+	CtrlMute
+	CtrlUnmute
+	CtrlToggleMute
+	CtrlSetSubtitle // uses TrackIndex (server subtitle stream index; -1 = off)
+	CtrlSetAudio    // uses TrackIndex (server audio stream index)
+	CtrlDisplayMsg  // uses Header/Text/TimeoutMs
 )
 
-// Control bundles a command with its optional numeric argument.
+// Control bundles a command with its optional arguments. Only the field(s)
+// relevant to Cmd are populated.
 type Control struct {
-	Cmd     ControlCmd
-	SeekSec float64
+	Cmd        ControlCmd
+	SeekSec    float64 // CtrlSeek*
+	Volume     int     // CtrlSetVolume (0-100)
+	TrackIndex int     // CtrlSetSubtitle / CtrlSetAudio (server stream index)
+	Header     string  // CtrlDisplayMsg
+	Text       string  // CtrlDisplayMsg
+	TimeoutMs  int     // CtrlDisplayMsg (0 = player default)
 }
 
 // PlayRequest is what to play and how.
