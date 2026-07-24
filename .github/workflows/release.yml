@@ -28,11 +28,11 @@ jobs:
           - { goos: darwin, goarch: amd64, ext: "" }
           - { goos: darwin, goarch: arm64, ext: "" }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0 # full history so `git describe` gives a real version
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
@@ -95,11 +95,11 @@ jobs:
           - { os: ubuntu-latest, goos: linux, goarch: amd64, lib: "libmeowflix.so" }
           - { os: macos-latest, goos: darwin, goarch: arm64, lib: "libmeowflix.dylib" }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
@@ -130,7 +130,7 @@ jobs:
             tar -C stage -czf "out/${NAME}.tar.gz" "$NAME"
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: ffi-${{ matrix.goos }}-${{ matrix.goarch }}
           path: out/*
@@ -144,7 +144,7 @@ jobs:
     needs: [binaries, ffi]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -159,7 +159,7 @@ jobs:
           ls -la release
 
       - name: Create release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
