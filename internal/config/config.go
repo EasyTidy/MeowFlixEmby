@@ -25,10 +25,24 @@ const (
 type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	Playback PlaybackConfig `yaml:"playback"`
+	Openlist OpenlistConfig `yaml:"openlist"`
 	Players  PlayersConfig  `yaml:"players"`
 	Subtitle SubtitleConfig `yaml:"subtitle"`
 	Version  VersionConfig  `yaml:"version"`
 	Log      LogConfig      `yaml:"log"`
+}
+
+// OpenlistConfig configures the openlist (AList-compatible) direct-cloud
+// strategy: when a server-side file path is not present on a local mount, its
+// path is mapped into openlist and resolved to a cloud-direct raw URL via the
+// openlist API. Leave Host empty to disable openlist entirely.
+type OpenlistConfig struct {
+	Host  string `yaml:"host"`  // e.g. http://192.168.31.10:5255
+	Token string `yaml:"token"` // openlist API key (env: MEOWFLIX_OPENLIST_TOKEN)
+	// PathMaps rewrite a server-side path prefix (Src) to the openlist path
+	// prefix (Dst). e.g. Src "/volume1/video" Dst "" turns
+	// /volume1/video/123Pan/电影/x.mp4 into openlist path /123Pan/电影/x.mp4.
+	PathMaps []PathMap `yaml:"path_maps"`
 }
 
 // ServerConfig describes how to reach and authenticate against the media server.
@@ -138,6 +152,9 @@ func (c *Config) applyEnvOverrides() {
 	if v := os.Getenv("MEOWFLIX_API_KEY"); v != "" {
 		c.Server.APIKey = v
 	}
+	if v := os.Getenv("MEOWFLIX_OPENLIST_TOKEN"); v != "" {
+		c.Openlist.Token = v
+	}
 }
 
 // Validate checks required fields and internal consistency.
@@ -162,6 +179,20 @@ func (c *Config) Validate() error {
 	for i, pm := range c.Playback.PathMaps {
 		if pm.Src == "" || pm.Dst == "" {
 			return fmt.Errorf("playback.path_maps[%d] needs both src and dst", i)
+		}
+	}
+	if c.Openlist.Host != "" {
+		if !strings.HasPrefix(c.Openlist.Host, "http://") && !strings.HasPrefix(c.Openlist.Host, "https://") {
+			return fmt.Errorf("openlist.host must start with http:// or https://")
+		}
+		if c.Openlist.Token == "" {
+			return fmt.Errorf("openlist.token is required when openlist.host is set")
+		}
+		// Openlist path maps only require a Src prefix; Dst may be empty (root).
+		for i, pm := range c.Openlist.PathMaps {
+			if pm.Src == "" {
+				return fmt.Errorf("openlist.path_maps[%d] needs a src prefix", i)
+			}
 		}
 	}
 	return nil

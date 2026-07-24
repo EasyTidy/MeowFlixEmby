@@ -15,13 +15,15 @@ type Engine struct{}
 func New() *Engine { return &Engine{} }
 
 // Resolve selects the best playback method following the priority order:
-//  1. force_disk_prefixes hit           -> DirectDisk
+//  1. force_disk_prefixes hit            -> DirectDisk
 //  2. http/strm source & direct_url host -> DirectURL (cloud direct)
-//  3. path_maps translate to local path  -> DirectDisk (mounted NAS)
-//  4. otherwise                          -> HTTPStream via server
+//  3. path_maps translate to a local file that EXISTS -> DirectDisk (mounted NAS)
+//  4. openlist enabled & path maps       -> Openlist (cloud-direct via API)
+//  5. path_maps translate (openlist off) -> DirectDisk (best effort)
+//  6. otherwise                          -> HTTPStream via server
 //
 // See docs/03-架构设计.md §3 for the full table.
-func (e *Engine) Resolve(item *mediaserver.MediaItem, srv mediaserver.Server, cfg Config) (Decision, error) {
+func (e *Engine) Resolve(item *mediaserver.MediaItem, urls mediaserver.URLBuilder, cfg Config) (Decision, error) {
 	if item == nil {
 		return Decision{}, fmt.Errorf("resolve: nil item")
 	}
@@ -49,17 +51,32 @@ func (e *Engine) Resolve(item *mediaserver.MediaItem, srv mediaserver.Server, cf
 		d.MountDisk = false
 		d.PlayMethod = "DirectStream"
 
-	// 3. Mounted NAS: server path translates to an existing local prefix.
+	// 3. Mounted NAS: server path translates to a local file that exists.
+	case !isHTTPSource && translatableExisting(src.Path, cfg.PathMaps):
+		d.Method = MethodDirectDisk
+		d.MediaPath = TranslatePath(src.Path, cfg.PathMaps, true)
+		d.MountDisk = true
+		d.PlayMethod = "DirectPlay"
+
+	// 4. Openlist direct-cloud: map the server path into openlist and let the
+	// caller resolve it to a raw URL.
+	case !isHTTPSource && cfg.OpenlistEnabled && translatable(src.Path, cfg.OpenlistPathMaps):
+		d.Method = MethodOpenlist
+		d.OpenlistPath = MapPath(src.Path, cfg.OpenlistPathMaps)
+		d.MountDisk = false
+		d.PlayMethod = "DirectStream"
+
+	// 5. Mounted NAS best-effort (openlist off, file not verified).
 	case !isHTTPSource && translatable(src.Path, cfg.PathMaps):
 		d.Method = MethodDirectDisk
 		d.MediaPath = TranslatePath(src.Path, cfg.PathMaps, cfg.PathCheck)
 		d.MountDisk = true
 		d.PlayMethod = "DirectPlay"
 
-	// 4. Fallback: stream over HTTP from the server.
+	// 6. Fallback: stream over HTTP from the server.
 	default:
 		d.Method = MethodHTTPStream
-		d.MediaPath = srv.StreamURL(item, src)
+		d.MediaPath = urls.StreamURL(item, src)
 		d.MountDisk = false
 		d.PlayMethod = "DirectStream"
 		if src.TranscodingURL != "" && src.DirectStreamURL == "" {
@@ -71,7 +88,7 @@ func (e *Engine) Resolve(item *mediaserver.MediaItem, srv mediaserver.Server, cf
 	sub := SelectSubtitle(src.Streams, cfg.SubtitlePriority, d.MountDisk)
 	d.SubIndex = sub.InnerIndex
 	if sub.External != nil && !d.MountDisk {
-		d.SubFile = srv.SubtitleURL(item, src, sub.External)
+		d.SubFile = urls.SubtitleURL(item, src, sub.External)
 	}
 
 	return d, nil

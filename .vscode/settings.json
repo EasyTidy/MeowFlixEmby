@@ -1,0 +1,12 @@
+{
+  // gopls must analyze the cgo file (api/ffi) with CGO enabled and a C compiler
+  // on PATH, otherwise every C.* symbol shows as "undefined" (false positive).
+  "go.toolsEnvVars": {
+    "CGO_ENABLED": "1"
+  },
+  "gopls": {
+    "build.env": {
+      "CGO_ENABLED": "1"
+    }
+  }
+}

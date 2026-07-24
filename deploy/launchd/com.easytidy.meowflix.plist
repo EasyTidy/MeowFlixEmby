@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  launchd LaunchAgent for the MeowFlixEmby daemon (macOS).
+
+  Install (per-user, so the daemon shares your GUI session and can launch a player):
+    cp deploy/launchd/com.easytidy.meowflix.plist ~/Library/LaunchAgents/
+    # edit the ProgramArguments paths below to match your install
+    launchctl load  ~/Library/LaunchAgents/com.easytidy.meowflix.plist
+    launchctl start com.easytidy.meowflix
+
+  Uninstall:
+    launchctl unload ~/Library/LaunchAgents/com.easytidy.meowflix.plist
+
+  Logs: see StandardOutPath / StandardErrorPath below.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.easytidy.meowflix</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <!-- Adjust these paths to your installation: -->
+        <string>/usr/local/bin/meowflix</string>
+        <string>-config</string>
+        <string>/Users/YOURNAME/Library/Application Support/meowflix/meowflix.yaml</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/meowflix.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/meowflix.err.log</string>
+</dict>
+</plist>
