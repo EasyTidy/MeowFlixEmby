@@ -17,6 +17,9 @@
   macOS launchd LaunchAgent（`deploy/launchd/com.easytidy.meowflix.plist`）。
 - **`.vscode/settings.json`**：为 gopls 启用 CGO_ENABLED=1，消除 cgo 文件
   （`api/ffi`）中 `C.*` 符号的"undefined"误报。
+- **GitHub Actions 发行流程** `.github/workflows/release.yml`：推送 `v*` 标签触发，
+  跨平台构建可执行文件（6 组 OS×arch）+ 原生构建 FFI 共享库（win/linux/mac）+
+  SHA256 校验和，自动发布 GitHub Release（`-` 标签标记为 prerelease）。
 - **跨平台构建脚本** `scripts/build.sh`：支持 `host` / `all`（windows/linux/darwin ×
   amd64/arm64），产物在 `dist/`，通过 `-ldflags` 注入版本/commit/构建时间。
 - **`-version` 标志**：打印版本、commit 与构建时间。

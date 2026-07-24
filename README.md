@@ -43,6 +43,21 @@ scripts/build.sh all      # windows/linux/darwin，amd64+arm64
 
 版本信息通过 `-ldflags` 注入，运行 `meowflix -version` 查看。
 
+### 发行版打包（GitHub Actions）
+
+推送 `v*` 标签即触发 [.github/workflows/release.yml](.github/workflows/release.yml)，
+自动构建并发布 GitHub Release：
+
+- **可执行文件**：windows/linux/darwin × amd64/arm64，各自打包（含示例配置、
+  对应平台的自启脚本、README/CHANGELOG）。Windows 为 `.zip`，其余为 `.tar.gz`。
+- **FFI 共享库**：在各原生 runner 上用 CGO 构建（`.dll`/`.so`/`.dylib` + 头文件 + EVENTS.md）。
+- **校验和**：`SHA256SUMS.txt`。
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0   # 触发发行流程；带 - 的预发布标签（如 v1.0.0-rc1）标记为 prerelease
+```
+
 ## 运行方式
 
 三种方式任选其一：

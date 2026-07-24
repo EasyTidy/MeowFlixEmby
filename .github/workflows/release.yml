@@ -1,0 +1,169 @@
+name: Release
+
+# Triggered when a version tag is pushed, e.g. `git tag v1.2.3 && git push origin v1.2.3`.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # needed to create the GitHub Release and upload assets
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Pure-Go binaries: cross-compiled for every OS/arch on a single runner
+  # (CGO disabled, so no per-platform toolchain needed).
+  # ---------------------------------------------------------------------------
+  binaries:
+    name: Binaries (${{ matrix.goos }}/${{ matrix.goarch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: windows, goarch: amd64, ext: ".exe" }
+          - { goos: windows, goarch: arm64, ext: ".exe" }
+          - { goos: linux, goarch: amd64, ext: "" }
+          - { goos: linux, goarch: arm64, ext: "" }
+          - { goos: darwin, goarch: amd64, ext: "" }
+          - { goos: darwin, goarch: arm64, ext: "" }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so `git describe` gives a real version
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+          VERSION: ${{ github.ref_name }}
+        run: |
+          COMMIT=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          LDFLAGS="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildDate=${BUILD_DATE}"
+          OUT="meowflix${{ matrix.ext }}"
+          go build -trimpath -ldflags "$LDFLAGS" -o "$OUT" ./cmd/meowflix
+
+      - name: Package
+        id: pkg
+        run: |
+          NAME="meowflix_${{ github.ref_name }}_${{ matrix.goos }}_${{ matrix.goarch }}"
+          STAGE="stage/${NAME}"
+          mkdir -p "$STAGE"
+          cp "meowflix${{ matrix.ext }}" "$STAGE/"
+          cp configs/meowflix.example.yaml "$STAGE/"
+          cp README.md CHANGELOG.md "$STAGE/"
+          # Bundle the platform-relevant autostart assets.
+          case "${{ matrix.goos }}" in
+            windows) mkdir -p "$STAGE/deploy" && cp -r deploy/windows "$STAGE/deploy/" ;;
+            linux)   mkdir -p "$STAGE/deploy" && cp -r deploy/systemd "$STAGE/deploy/" ;;
+            darwin)  mkdir -p "$STAGE/deploy" && cp -r deploy/launchd "$STAGE/deploy/" ;;
+          esac
+          mkdir -p out
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            (cd stage && zip -r "../out/${NAME}.zip" "$NAME") >/dev/null
+            echo "asset=out/${NAME}.zip" >> "$GITHUB_OUTPUT"
+          else
+            tar -C stage -czf "out/${NAME}.tar.gz" "$NAME"
+            echo "asset=out/${NAME}.tar.gz" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: out/*
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # FFI c-shared library: needs CGO, so it's built natively on each OS runner
+  # (cgo cross-compilation would need per-target C toolchains). Each runner
+  # builds for its own native architecture.
+  # ---------------------------------------------------------------------------
+  ffi:
+    name: FFI (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, goos: windows, goarch: amd64, lib: "meowflix.dll" }
+          - { os: ubuntu-latest, goos: linux, goarch: amd64, lib: "libmeowflix.so" }
+          - { os: macos-latest, goos: darwin, goarch: arm64, lib: "libmeowflix.dylib" }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build c-shared library
+        shell: bash
+        env:
+          CGO_ENABLED: "1"
+          VERSION: ${{ github.ref_name }}
+        run: |
+          LDFLAGS="-s -w -X main.version=${VERSION}"
+          go build -buildmode=c-shared -trimpath -ldflags "$LDFLAGS" -o "${{ matrix.lib }}" ./api/ffi
+
+      - name: Package
+        shell: bash
+        run: |
+          NAME="meowflix-ffi_${{ github.ref_name }}_${{ matrix.goos }}_${{ matrix.goarch }}"
+          STAGE="stage/${NAME}"
+          mkdir -p "$STAGE"
+          cp "${{ matrix.lib }}" "$STAGE/"
+          # The generated header sits next to the lib, named after it minus ext.
+          HDR="${{ matrix.lib }}"; HDR="${HDR%.*}.h"
+          [ -f "$HDR" ] && cp "$HDR" "$STAGE/meowflix.h" || cp meowflix.h "$STAGE/" 2>/dev/null || true
+          cp api/ffi/EVENTS.md "$STAGE/"
+          mkdir -p out
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            (cd stage && 7z a "../out/${NAME}.zip" "$NAME") >/dev/null
+          else
+            tar -C stage -czf "out/${NAME}.tar.gz" "$NAME"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffi-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: out/*
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # Collect every artifact and publish a GitHub Release for the tag.
+  # ---------------------------------------------------------------------------
+  release:
+    name: Publish release
+    needs: [binaries, ffi]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect and checksum
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name '*.zip' -o -name '*.tar.gz' \) -exec cp {} release/ \;
+          (cd release && sha256sum * > SHA256SUMS.txt)
+          ls -la release
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: release/*
