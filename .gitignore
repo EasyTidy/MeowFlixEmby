@@ -1,0 +1,16 @@
+# Binaries
+/meowflix
+/meowflix.exe
+*.dll
+*.so
+*.dylib
+
+# Local config & logs
+meowflix.yaml
+*.log
+
+# Build output
+/dist/
+
+# OS / editor
+.DS_Store

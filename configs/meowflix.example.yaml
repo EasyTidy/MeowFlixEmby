@@ -1,0 +1,47 @@
+# MeowFlixEmby 配置示例。复制为 meowflix.yaml 并按需修改。
+# 敏感字段可用环境变量覆盖：
+#   MEOWFLIX_SERVER_ADDRESS / MEOWFLIX_USERNAME / MEOWFLIX_PASSWORD / MEOWFLIX_API_KEY
+
+server:
+  type: emby                              # emby | jellyfin | plex
+  address: https://emby.example.com       # 必填，含 http(s):// 前缀
+  username: alice                         # 用户名+密码 或 api_key 二选一
+  password: ""
+  api_key: ""                             # 注意：纯 api_key 不能作为投放目标，需用户名密码
+  device_name: "MeowFlix (Living Room PC)"
+  skip_tls_verify: false                  # 自签名证书时才开
+
+playback:
+  # 服务器端路径前缀 → 本地已挂载磁盘前缀（NAS 场景）
+  path_maps:
+    - src: /mnt/disk1
+      dst: E:\
+    - src: /mnt/disk2/media
+      dst: F:\media
+  # 命中这些前缀则强制走本地磁盘直播
+  force_disk_prefixes: []
+  # 命中这些域名/关键字的 strm/http 源，让播放器直连该 URL（网盘直连）
+  direct_url_hosts: []
+  path_check: false                       # 路径转换后校验文件存在 + NFC/NFD
+  one_instance: false                     # 是否限制播放器单实例
+
+players:
+  default: mpv
+  by_path:                                # 按媒体路径关键字选择播放器
+    - player: vlc
+      match: [".iso", "__bdmv"]
+  exe:
+    mpv: C:\Green\mpv\mpv.exe
+    potplayer: C:\Program Files\DAUM\PotPlayer\PotPlayerMini64.exe
+    vlc: C:\Green\vlc\vlc.exe
+
+subtitle:
+  priority: ["中英", "双语", "简", "chi", "ass", "srt"]
+
+version:
+  prefer: ["remux", "2160", "1080"]
+
+log:
+  level: info                             # debug | info | warn | error
+  file: ./meowflix.log
+  mask_sensitive: true                    # 日志脱敏 token/域名
