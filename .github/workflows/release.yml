@@ -64,9 +64,19 @@ jobs:
             linux)   mkdir -p "$STAGE/deploy" && cp -r deploy/systemd "$STAGE/deploy/" ;;
             darwin)  mkdir -p "$STAGE/deploy" && cp -r deploy/launchd "$STAGE/deploy/" ;;
           esac
+          # Windows: surface the double-click entry points at the archive root,
+          # next to meowflix.exe, plus the beginner guide. Users who only
+          # double-click never open deploy\windows\.
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            cp deploy/windows/*.bat "$STAGE/"
+            cp "docs/00-新手入门指南.md" "$STAGE/"
+          fi
           mkdir -p out
           if [ "${{ matrix.goos }}" = "windows" ]; then
-            (cd stage && zip -r "../out/${NAME}.zip" "$NAME") >/dev/null
+            # Info-ZIP sets the UTF-8 name flag (general-purpose bit 11) for
+            # non-ASCII entries, so the Chinese .bat names survive extraction by
+            # Windows Explorer. Keep the runner locale UTF-8 for that to hold.
+            (cd stage && LC_ALL=C.UTF-8 zip -r "../out/${NAME}.zip" "$NAME") >/dev/null
             echo "asset=out/${NAME}.zip" >> "$GITHUB_OUTPUT"
           else
             tar -C stage -czf "out/${NAME}.tar.gz" "$NAME"
@@ -130,7 +140,7 @@ jobs:
             tar -C stage -czf "out/${NAME}.tar.gz" "$NAME"
           fi
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v4
         with:
           name: ffi-${{ matrix.goos }}-${{ matrix.goarch }}
           path: out/*

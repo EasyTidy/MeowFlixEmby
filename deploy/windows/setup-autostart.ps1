@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Run MeowFlixEmby at user login WITHOUT installing a Windows service.
 
