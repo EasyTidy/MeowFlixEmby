@@ -1,0 +1,66 @@
+# MeowFlixEmby — 需求与背景分析
+
+> 本文档是设计方案的第 1 部分。配套文档：
+> - [02-方案选型与语言论证](02-architecture-and-language-choice.md)
+> - [03-架构设计](03-architecture-design.md)
+> - [04-Go 工程分层与规范](04-go-project-structure.md)
+> - [05-实施计划](05-implementation-plan.md)
+
+## 1. 项目目标
+
+在 Emby（兼容 Jellyfin，尽量兼容 Plex）搭建的媒体服务上，用户从**浏览器**触发播放时，把视频**串流/直连到本地播放器**（mpv / PotPlayer / VLC / MPC 等）播放，并把**播放进度回传**给媒体服务器。
+
+关键约束：
+
+1. **Emby 与播放器不一定在同一台设备**：本地程序运行在"有播放器的客户端机器"上，Emby 可能在 NAS、云主机或另一台电脑。
+2. **按资源类型选择最佳播放方式**：
+   - **网盘挂载资源**（strm / 可直连的 http 网盘地址）→ 让本地播放器**直连网盘 URL**，绕过 Emby 中转。
+   - **NAS 硬盘资源且本地已挂载为磁盘**（如 SMB/NFS 映射盘、rclone mount）→ 用**本地磁盘路径**直接播放，零网络中转。
+   - **其余情况** → 走 Emby 的 **HTTP Direct Stream** 地址串流。
+3. **尽量不用篡改猴（Tampermonkey）等浏览器用户脚本**（除非需求实在无法避免）。
+4. **可插拔**：既能作为库/插件集成进其他项目，也能独立运行。
+5. 使用 Rust / Go / .NET 中的一种，遵循该语言的最佳项目分层实践。
+
+## 2. 参考项目分析：`embyToLocalPlayer`（Python + 油猴脚本）
+
+现有开源项目 [`embyToLocalPlayer`](https://github.com/kjtsune/embyToLocalPlayer) 实现了同类需求。已通读其源码，机制如下：
+
+### 2.1 触发机制（现有方案的痛点）
+
+- 浏览器侧靠**油猴脚本** `embyToLocalPlayer.user.js`，在 `document-start` 劫持 `window.fetch` 与 `XMLHttpRequest`。
+- 拦截 Emby/Jellyfin 的 `/Items/{id}/PlaybackInfo` 请求、Plex 的 `playQueues` 请求。
+- 用户点击网页原生"播放"按钮时，脚本把播放数据（ApiClient 信息、playbackData、playbackUrl、extraData）`POST` 到本地 `http://127.0.0.1:58000`。
+
+> 这正是本项目要**规避**的部分——依赖浏览器扩展 + 用户脚本，安装繁琐、随 Emby/Jellyfin 前端改版易失效（脚本里大量 CSS 选择器和 DOM 兼容代码，见 `removeErrorWindows`、`addFileNameElement` 等）。
+
+### 2.2 本地服务与播放方式决策（需要复刻的核心价值）
+
+Python 端 `utils/data_parser.py` + `utils/tools.py` 决定播放方式，核心判定（`parse_received_data_emby`）：
+
+| 条件 | 结果 `media_path` |
+|------|------|
+| `force_disk_mode_path` 前缀命中服务器文件路径 | 强制**读盘模式** |
+| strm 且源为 http 且 `strm_direct_host` 命中 | **直连网盘 URL**（`source_path`） |
+| 用户开启挂载盘模式，非 strm | `translate_path_by_ini(file_path)` → **本地磁盘路径** |
+| 其余 | Emby **HTTP Direct Stream URL** |
+
+- **路径转换**（`translate_path_by_ini`）：把服务器端前缀（`[src]`，如 `/mnt/disk1`）替换为本地前缀（`[dst]`，如 `E:`），可选 `path_check` 检查文件存在与 NFC/NFD 规范化。
+- **多版本选择**（`version_prefer_emby`）：按文件名关键字优先级选流。
+- **字幕选择**（`subtitle_checker`）：按 `subtitle_priority` 关键字优先级挑外挂/内封字幕。
+
+### 2.3 播放器集成与进度回传
+
+- `utils/players.py`：为 mpv（命名管道 / unix socket JSON IPC）、VLC（HTTP 接口）、PotPlayer、MPC、IINA 等分别实现启动 + 进度读取。
+- `utils/player_manager.py`：组织连播（playlist）、实时进度、预取下一集、下一集重定向。
+- `utils/net_tools.py`：进度回传到 `Sessions/Playing`、`Sessions/Playing/Progress`、`Sessions/Playing/Stopped`（Emby/Jellyfin）与 `/:/timeline`（Plex）。tick 单位为 100ns（`sec * 10^7`）。
+- 可选同步 trakt.tv / bgm.tv 观看记录。
+
+## 3. 与现有方案的取舍
+
+保留其**播放方式决策、路径转换、多版本/字幕选择、播放器 IPC 读进度、进度回传**这套经过实战打磨的领域逻辑；**替换掉**其"油猴脚本拦截浏览器请求"的触发机制。
+
+替代触发机制经与需求方确认，采用 **投放 / 遥控目标（Cast target）** 方案（详见 [02](02-architecture-and-language-choice.md)、[03](03-architecture-design.md)）：本地 Go 程序通过 WebSocket 把自己注册成 Emby 的一个"可遥控会话/可投放设备"，用户在网页端"Play On / 投放"选中本机后，服务器把播放指令推送给本地程序。**零浏览器改动、零服务器改动、天然跨设备。**
+
+## 4. 实现语言
+
+经确认选用 **Go**。论证见 [02-方案选型与语言论证](02-architecture-and-language-choice.md)。
