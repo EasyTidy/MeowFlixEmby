@@ -22,7 +22,7 @@ func New() *Engine { return &Engine{} }
 //  5. path_maps translate (openlist off) -> DirectDisk (best effort)
 //  6. otherwise                          -> HTTPStream via server
 //
-// See docs/03-架构设计.md §3 for the full table.
+// See docs/03-architecture-design.md §3 for the full table.
 func (e *Engine) Resolve(item *mediaserver.MediaItem, urls mediaserver.URLBuilder, cfg Config) (Decision, error) {
 	if item == nil {
 		return Decision{}, fmt.Errorf("resolve: nil item")
