@@ -1,130 +1,165 @@
-# MeowFlixEmby
+<h1 align="center">
+  MeowFlixEmby 🎬
+</h1>
 
-从 Emby（兼容 Jellyfin，尽量兼容 Plex）网页端把播放**投放到本地播放器**（mpv / PotPlayer / VLC / MPC…），按资源类型选择最佳播放方式，并把进度回传给服务器。**无需油猴脚本、无需改动服务器。**
+<p align="center">
+  <img src="https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go&logoColor=white" alt="Go version">
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey" alt="Platform">
+  <img src="https://img.shields.io/badge/server-Emby%20%7C%20Jellyfin-52B54B" alt="Media Server">
+</p>
 
-## 它如何工作
+<p align="center">
+  <strong>Cast Emby / Jellyfin playback from the web UI to your local media player.<br>
+  Automatic best-path routing with progress sync back to the server.</strong><br>
+  <sub>No userscripts · No server modifications · mpv / VLC / PotPlayer / MPC-HC</sub>
+</p>
 
-MeowFlixEmby 作为常驻守护进程，通过 WebSocket 把自己注册成 Emby 的一个"可遥控/可投放会话"。在网页端点视频 → **Play On / 投放** → 选中本机，服务器即把播放指令推给本进程，由它拉起本地播放器播放。
+<p align="center">
+  <a href="README.zh-CN.md">🇨🇳 中文文档</a> &nbsp;·&nbsp;
+  <a href="docs/Getting-Started-Windows.md">📖 Getting Started (Windows)</a>
+</p>
 
-按资源类型自动选择播放方式：
+---
 
-- **网盘挂载资源**（strm / 可直连 http 源）→ 播放器**直连网盘 URL**，绕过服务器中转。
-- **NAS 硬盘且本地已挂载为磁盘** → 用**本地磁盘路径**直接播放。
-- **其余** → 走服务器 **HTTP Direct Stream**。
+## Table of Contents
 
-## 设计文档
+- [How It Works](#how-it-works)
+- [Key Features](#key-features)
+- [Quick Start](#quick-start)
+- [Build](#build)
+- [Running Modes](#running-modes)
+- [FFI Embedding](#ffi-embedding)
+- [Design Docs](#design-docs)
+- [License](#license)
 
-完整方案见 [docs/](docs/)：
+## How It Works
 
-1. [需求与背景分析](docs/01-需求与背景分析.md)
-2. [方案选型与语言论证](docs/02-方案选型与语言论证.md)
-3. [架构设计](docs/03-架构设计.md)
-4. [Go 工程分层与规范](docs/04-Go%20工程分层与规范.md)
-5. [实施计划](docs/05-实施计划.md)
+MeowFlixEmby runs as a persistent daemon. It registers itself as a controllable/castable session with Emby/Jellyfin via WebSocket. Click play on the web UI → **Play On / Cast** → select this device, and the server pushes the playback command to this process, which then launches your local media player.
 
-## 快速开始（开发中）
+### Smart Playback Routing
+
+Automatically selects the best playback path based on resource type:
+
+| Priority | Resource Type | Playback Method |
+|:---:|:---|:---|
+| 1 | Cloud drive resources (strm / direct HTTP source) | **Direct cloud drive URL**, bypassing server relay |
+| 2 | NAS drive mounted locally | **Local disk path** playback |
+| 3 | Everything else | **HTTP Direct Stream** via server |
+
+## Key Features
+
+- **Remote Cast** — Click "Play On" in the web UI, local player launches automatically
+- **Smart Routing** — 4-tier strategy: DirectDisk > Openlist Direct > DirectURL > HTTP Stream
+- **Multi-Player Support** — Full support for mpv (full remote control), VLC, MPC-HC, PotPlayer, generic players
+- **Playback Control** — Pause / Fast-Forward / Seek / Volume / Mute / Subtitle & Audio Track switching
+- **Auto-Play Next + Progress Sync** — Auto-plays next episode at ≥90% completion; periodically reports progress back to server
+- **Cross-Platform Auto-Start** — Windows service / user-level startup (no admin), Linux systemd, macOS launchd
+- **Non-Intrusive** — No server-side modifications, no userscripts required
+- **FFI Embedding** — Compiles to a C shared library for integration with Electron/Tauri/Qt hosts
+
+## Quick Start
 
 ```bash
 cp configs/meowflix.example.yaml meowflix.yaml
-# 编辑 meowflix.yaml 填入服务器地址与账号
+# Edit meowflix.yaml with your server address and credentials
 go run ./cmd/meowflix -config meowflix.yaml
 ```
 
-## 构建
+## Build
 
 ```bash
 go build ./...
 go test -race ./...
 
-# 跨平台构建（产物在 dist/）
-scripts/build.sh          # 当前平台
-scripts/build.sh all      # windows/linux/darwin，amd64+arm64
+# Cross-platform build (output in dist/)
+scripts/build.sh          # current platform
+scripts/build.sh all      # windows/linux/darwin, amd64 + arm64
 ```
 
-版本信息通过 `-ldflags` 注入，运行 `meowflix -version` 查看。
+Version info is injected via `-ldflags`. Run `meowflix -version` to view.
 
-### 发行版打包（GitHub Actions）
+### GitHub Actions Releases
 
-推送 `v*` 标签即触发 [.github/workflows/release.yml](.github/workflows/release.yml)，
-自动构建并发布 GitHub Release：
+Push a `v*` tag to trigger [release.yml](.github/workflows/release.yml), which automatically builds and publishes a GitHub Release:
 
-- **可执行文件**：windows/linux/darwin × amd64/arm64，各自打包（含示例配置、
-  对应平台的自启脚本、README/CHANGELOG）。Windows 为 `.zip`，其余为 `.tar.gz`。
-- **FFI 共享库**：在各原生 runner 上用 CGO 构建（`.dll`/`.so`/`.dylib` + 头文件 + EVENTS.md）。
-- **校验和**：`SHA256SUMS.txt`。
+| Artifact | Description |
+|:---|:---|
+| **Binaries** | windows/linux/darwin × amd64/arm64 with sample config & startup scripts. Windows `.zip`, others `.tar.gz` |
+| **FFI Libraries** | CGO-built `.dll` / `.so` / `.dylib` + header files for each platform |
+| **Checksums** | `SHA256SUMS.txt` |
 
 ```bash
 git tag v1.0.0
-git push origin v1.0.0   # 触发发行流程；带 - 的预发布标签（如 v1.0.0-rc1）标记为 prerelease
+git push origin v1.0.0   # triggers release workflow; tags with `-` are marked as prerelease
 ```
 
-## 运行方式
+## Running Modes
 
-三种方式任选其一：
+Choose one mode. Auto-start and Windows Service are **mutually exclusive** — do not enable both.
 
-1. **前台运行**（默认，无需安装）：直接 `meowflix -config meowflix.yaml`，Ctrl+C 退出。
-2. **开机登录自启**（推荐日常使用，无需管理员）：见下方"Windows 开机启动项"。
-3. **Windows 服务**（后台常驻，需管理员）：见下方"Windows 服务"。
+### 1. Foreground (default)
 
-方式 2 与 3 二选一，不要同时启用。
+```bash
+meowflix -config meowflix.yaml   # Ctrl+C to exit
+```
 
-### Windows 开机启动项（免管理员）
+### 2. Windows User-Level Auto-Start (recommended, no admin)
 
-注册到当前用户的登录启动项，运行在你的交互桌面会话中（能拉起播放器），默认隐藏控制台窗口：
+Registers as a login startup item for the current user. Console window is hidden by default:
 
 ```powershell
 deploy\windows\setup-autostart.ps1 -Action install -Exe C:\meowflix\meowflix.exe -Config C:\meowflix\meowflix.yaml
 deploy\windows\setup-autostart.ps1 -Action status
 deploy\windows\setup-autostart.ps1 -Action uninstall
-# 需要看到控制台窗口时加 -ShowWindow
 ```
 
-窗口隐藏后请在配置中设置 `log.file` 以保留日志。
+Since the console is hidden, set `log.file` in your config to persist logs.
 
-### Windows 服务
-
-**Windows 服务**（需管理员权限）：
+### 3. Windows Service (requires admin)
 
 ```powershell
-# 直接用内置命令
+# Built-in commands
 meowflix.exe -service install -config C:\meowflix\meowflix.yaml
 meowflix.exe -service start
-meowflix.exe -service status
 meowflix.exe -service stop
 meowflix.exe -service uninstall
 
-# 或用封装脚本
+# Or via wrapper script
 deploy\windows\install-service.ps1 -Action install -Exe C:\meowflix\meowflix.exe -Config C:\meowflix\meowflix.yaml
 ```
 
-服务以自动启动方式注册，并配置失败自动重启。日志建议在配置中设置 `log.file`，因为服务无控制台。
+Registered as auto-start with automatic restart on failure. Set `log.file` in your config since the service has no console.
 
-**Linux（systemd 用户级）**：见 [deploy/systemd/meowflix.service](deploy/systemd/meowflix.service)。
+### Linux (systemd user-level)
 
-**macOS（launchd）**：见 [deploy/launchd/com.easytidy.meowflix.plist](deploy/launchd/com.easytidy.meowflix.plist)。
+See [deploy/systemd/meowflix.service](deploy/systemd/meowflix.service).
 
-## 作为共享库嵌入（FFI）
+### macOS (launchd)
 
-可编译为 C 共享库供原生宿主（Electron/Tauri sidecar、Qt/WinUI 等）嵌入：
+See [deploy/launchd/com.easytidy.meowflix.plist](deploy/launchd/com.easytidy.meowflix.plist).
+
+## FFI Embedding
+
+Build as a C shared library for embedding in native hosts:
 
 ```bash
-scripts/build-shared.sh   # 产出 dist/{meowflix.dll|libmeowflix.so|libmeowflix.dylib} + meowflix.h
+scripts/build-shared.sh   # produces dist/{meowflix.dll,libmeowflix.so,libmeowflix.dylib} + meowflix.h
 ```
 
-导出的生命周期 API 与事件回调 JSON 结构见 [api/ffi/EVENTS.md](api/ffi/EVENTS.md)。
+Ideal for Electron/Tauri sidecars, Qt/WinUI, etc. Exported lifecycle APIs and event callback JSON schemas are documented in [api/ffi/EVENTS.md](api/ffi/EVENTS.md).
 
-## 状态
+## Design Docs
 
-按 [实施计划](docs/05-实施计划.md) 分 M0–M6 推进。当前：**M0–M6 全部完成**。
+| No. | Document |
+|:---:|:---|
+| 0 | [Getting Started Guide (Windows)](docs/Getting-Started-Windows.md) |
+| 1 | [Requirements & Background](docs/01-需求与背景分析.md) |
+| 2 | [Architecture Decision & Language Rationale](docs/02-方案选型与语言论证.md) |
+| 3 | [Architecture Design](docs/03-架构设计.md) |
+| 4 | [Go Project Layering & Conventions](docs/04-Go%20工程分层与规范.md) |
+| 5 | [Implementation Plan](docs/05-实施计划.md) |
 
-- **M0–M2**：配置、Emby 客户端、鉴权与能力上报。
-- **M3**：WebSocket 遥控会话——网页端 "Play On" 投放本机。
-- **M4**：mpv JSON IPC 驱动（完整遥控）。
-- **M5**：端到端闭环——resolver 决策 → 拉起播放器 → 周期回传进度 → 遥控（暂停/快进/Seek/停止）与连播下一集；openlist 直连网盘策略。
-- **M6**：跨平台构建脚本、Windows 服务 / systemd / launchd 自启、FFI c-shared 导出；播放器驱动扩展到 mpv / VLC / PotPlayer / MPC-HC / generic。
+## License
 
-详见 [CHANGELOG.md](CHANGELOG.md)。
-
-## 许可
-
-MIT
+[MIT](LICENSE)
