@@ -48,6 +48,7 @@ players:
   #   potplayer—— 仅启动播放 + 停止（无运行时遥控/进度回传）
   #   generic  —— 任意可执行文件，仅启动 + 停止（配置了 exe.generic 才启用）
   default: mpv
+  fullscreen: false                       # 播放器默认全屏：mpv(--fs) / VLC(-f) / MPC-HC·PotPlayer(/fullscreen)
   by_path:                                # 按媒体路径关键字选择播放器
     - player: vlc
       match: [".iso", "__bdmv"]
