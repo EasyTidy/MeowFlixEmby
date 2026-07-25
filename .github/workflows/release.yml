@@ -83,7 +83,7 @@ jobs:
             echo "asset=out/${NAME}.tar.gz" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
           path: out/*
@@ -140,7 +140,7 @@ jobs:
             tar -C stage -czf "out/${NAME}.tar.gz" "$NAME"
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: ffi-${{ matrix.goos }}-${{ matrix.goarch }}
           path: out/*
@@ -157,7 +157,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           path: artifacts
 
