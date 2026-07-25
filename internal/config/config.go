@@ -80,9 +80,10 @@ type PlayerByPath struct {
 
 // PlayersConfig configures which player to launch and where the binaries live.
 type PlayersConfig struct {
-	Default string            `yaml:"default"`
-	ByPath  []PlayerByPath    `yaml:"by_path"`
-	Exe     map[string]string `yaml:"exe"`
+	Default    string            `yaml:"default"`
+	ByPath     []PlayerByPath    `yaml:"by_path"`
+	Exe        map[string]string `yaml:"exe"`
+	Fullscreen bool              `yaml:"fullscreen"` // launch players in fullscreen mode
 }
 
 // SubtitleConfig holds subtitle selection preferences (keyword priority).
