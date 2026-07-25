@@ -16,7 +16,8 @@
 </p>
 
 <p align="center">
-  <a href="README.zh-CN.md">🇨🇳 中文文档</a>
+  <a href="README.zh-CN.md">🇨🇳 中文文档</a> &nbsp;·&nbsp;
+  <a href="docs/Getting-Started-Windows.md">📖 Getting Started (Windows)</a>
 </p>
 
 ---
@@ -150,9 +151,9 @@ Ideal for Electron/Tauri sidecars, Qt/WinUI, etc. Exported lifecycle APIs and ev
 
 ## Design Docs
 
-| No. | Document (Chinese) |
+| No. | Document |
 |:---:|:---|
-| 0 | [Getting Started Guide](docs/00-新手入门指南.md) |
+| 0 | [Getting Started Guide (Windows)](docs/Getting-Started-Windows.md) |
 | 1 | [Requirements & Background](docs/01-需求与背景分析.md) |
 | 2 | [Architecture Decision & Language Rationale](docs/02-方案选型与语言论证.md) |
 | 3 | [Architecture Design](docs/03-架构设计.md) |
